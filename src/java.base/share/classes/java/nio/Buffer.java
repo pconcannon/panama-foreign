@@ -838,9 +838,9 @@ public abstract class Buffer {
                 @Override
                 public void unlockBufferScope(Buffer buffer){
                     if (buffer != null) {
-                        ScopedMemoryAccess.Scope scope = buffer.scope();
-                        if (scope != null)
-                            scope.unlockScope();
+//                        ScopedMemoryAccess.Scope scope = buffer.scope();
+//                        if (scope != null)
+//                            scope.unlockScope();
                         AutoCloseable lock = scopeLock;
                         if (lock != null) {
                             try {
