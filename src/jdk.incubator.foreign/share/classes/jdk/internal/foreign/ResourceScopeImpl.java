@@ -152,7 +152,6 @@ public abstract class ResourceScopeImpl implements ResourceScope, ScopedMemoryAc
      */
     public abstract boolean isAlive();
 
-
     /**
      * This is a faster version of {@link #checkValidStateSlow()}, which is called upon memory access, and which
      * relies on invariants associated with the memory scope implementations (typically, volatile access
@@ -161,6 +160,15 @@ public abstract class ResourceScopeImpl implements ResourceScope, ScopedMemoryAc
      */
     public abstract void checkValidState();
 
+    public AutoCloseable lockScope() {
+        return acquire();
+    }
+
+    public void unlockScope() {
+        try {
+            close();
+        } catch (Exception ex) { }
+    }
     /**
      * Checks that this scope is still alive (see {@link #isAlive()}).
      * @throws IllegalStateException if this scope is already closed or if this is

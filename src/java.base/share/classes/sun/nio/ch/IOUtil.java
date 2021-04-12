@@ -29,6 +29,10 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import jdk.internal.access.JavaNioAccess;
+import jdk.internal.access.SharedSecrets;
+import jdk.internal.misc.ScopedMemoryAccess;
+
 
 /**
  * File-descriptor based I/O utilities that are shared by NIO classes.
@@ -36,6 +40,7 @@ import java.nio.ByteBuffer;
 
 public class IOUtil {
 
+    private static final JavaNioAccess NIO_ACCESS = SharedSecrets.getJavaNioAccess();
     /**
      * Max number of iovec structures that readv/writev supports
      */
@@ -105,15 +110,18 @@ public class IOUtil {
         int written = 0;
         if (rem == 0)
             return 0;
-        if (position != -1) {
-            written = nd.pwrite(fd,
-                                ((DirectBuffer)bb).address() + pos,
-                                rem, position);
-        } else {
-            written = nd.write(fd, ((DirectBuffer)bb).address() + pos, rem);
+        // Lock scope if set. Otherwise, do nothing
+        lockBufferScope(bb);
+        try {
+            long address = NIO_ACCESS.getBufferAddress(bb);
+            if (position != -1) {
+                written = nd.pwrite(fd, address + pos, rem, position);
+            } else {
+                written = nd.write(fd, address + pos, rem);
+            }
+        } finally {
+            unlockBufferScope(bb);
         }
-        if (written > 0)
-            bb.position(pos + written);
         return written;
     }
 
@@ -143,6 +151,8 @@ public class IOUtil {
             // Iterate over buffers to populate native iovec array.
             int count = offset + length;
             int i = offset;
+            // Lock scope if set. Otherwise, do nothing
+            lockBufferScopes(bufs);
             while (i < count && iov_len < IOV_MAX) {
                 ByteBuffer buf = bufs[i];
                 int pos = buf.position();
@@ -203,6 +213,7 @@ public class IOUtil {
             return bytesWritten;
 
         } finally {
+            unlockBufferScopes(bufs);
             // if an error occurred then clear refs to buffers and return any shadow
             // buffers to cache
             if (!completed) {
@@ -270,10 +281,17 @@ public class IOUtil {
         if (rem == 0)
             return 0;
         int n = 0;
-        if (position != -1) {
-            n = nd.pread(fd, ((DirectBuffer)bb).address() + pos, rem, position);
-        } else {
-            n = nd.read(fd, ((DirectBuffer)bb).address() + pos, rem);
+        // Lock scope if set. Otherwise, do nothing
+        lockBufferScope(bb);
+        try {
+            long addr = NIO_ACCESS.getBufferAddress(bb);
+            if (position != -1) {
+                n = nd.pread(fd, addr + pos, rem, position);
+            } else {
+                n = nd.read(fd, addr + pos, rem);
+            }
+        } finally {
+            unlockBufferScope(bb);
         }
         if (n > 0)
             bb.position(pos + n);
@@ -306,6 +324,8 @@ public class IOUtil {
             // Iterate over buffers to populate native iovec array.
             int count = offset + length;
             int i = offset;
+            // Lock scope if set. Otherwise, do nothing
+            lockBufferScopes(bufs);
             while (i < count && iov_len < IOV_MAX) {
                 ByteBuffer buf = bufs[i];
                 if (buf.isReadOnly())
@@ -371,6 +391,7 @@ public class IOUtil {
             return bytesRead;
 
         } finally {
+            unlockBufferScopes(bufs);
             // if an error occurred then clear refs to buffers and return any shadow
             // buffers to cache
             if (!completed) {
@@ -380,6 +401,30 @@ public class IOUtil {
                         Util.offerLastTemporaryDirectBuffer(shadow);
                     vec.clearRefs(j);
                 }
+            }
+        }
+    }
+
+    /** Lock the buffers scope, if non-null. */
+    private static void lockBufferScope(ByteBuffer bb) {
+        NIO_ACCESS.lockBufferScope(bb);
+    }
+    private static void lockBufferScopes(ByteBuffer[] bbs) {
+        if (bbs != null) {
+            for (ByteBuffer b : bbs) {
+                NIO_ACCESS.lockBufferScope(b);
+            }
+        }
+    }
+
+    /** Unlock the buffers scope lock, if non-null. */
+    private static void unlockBufferScope(ByteBuffer bb)  {
+        NIO_ACCESS.unlockBufferScope(bb);
+    }
+    private static void unlockBufferScopes(ByteBuffer[] bbs) {
+        if (bbs != null) {
+            for (ByteBuffer b : bbs) {
+                NIO_ACCESS.unlockBufferScope(b);
             }
         }
     }

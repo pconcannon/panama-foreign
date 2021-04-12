@@ -32,6 +32,9 @@ import java.util.concurrent.*;
 import java.io.IOException;
 import java.io.FileDescriptor;
 
+import jdk.internal.access.JavaNioAccess;
+import jdk.internal.access.SharedSecrets;
+import jdk.internal.misc.ScopedMemoryAccess;
 import sun.net.ConnectionResetException;
 import sun.net.NetHooks;
 import sun.net.util.SocketExceptions;
@@ -44,6 +47,8 @@ import sun.security.action.GetPropertyAction;
 class UnixAsynchronousSocketChannelImpl
     extends AsynchronousSocketChannelImpl implements Port.PollableChannel
 {
+    private static final JavaNioAccess NIO_ACCESS = SharedSecrets.getJavaNioAccess();
+
     private static final NativeDispatcher nd = new SocketDispatcher();
     private static enum OpType { CONNECT, READ, WRITE };
 
@@ -51,8 +56,7 @@ class UnixAsynchronousSocketChannelImpl
     static {
         String propValue = GetPropertyAction.privilegedGetProperty(
             "sun.nio.ch.disableSynchronousRead", "false");
-        disableSynchronousRead = propValue.isEmpty() ?
-            true : Boolean.parseBoolean(propValue);
+        disableSynchronousRead = propValue.isEmpty() || Boolean.parseBoolean(propValue);
     }
 
     private final Port port;
@@ -375,6 +379,26 @@ class UnixAsynchronousSocketChannelImpl
         }
     }
 
+    /** Lock the buffers scope, if non-null. */
+    private static void lockBufferScopes(ByteBuffer bb, ByteBuffer[] bbs) {
+        NIO_ACCESS.lockBufferScope(bb);
+
+        if (bbs != null) {
+            for (ByteBuffer b : bbs)
+               NIO_ACCESS.lockBufferScope(b);
+        }
+    }
+
+    /** Unlock the buffers scope lock, if non-null. */
+    private static void unlockBufferScopes(ByteBuffer bb, ByteBuffer[] bbs) {
+        NIO_ACCESS.unlockBufferScope(bb);
+
+        if (bbs != null) {
+            for (ByteBuffer b : bbs)
+                NIO_ACCESS.unlockBufferScope(b);
+        }
+    }
+
     // -- read --
 
     private void finishRead(boolean mayInvokeDirect) {
@@ -403,6 +427,8 @@ class UnixAsynchronousSocketChannelImpl
                 }
                 return;
             }
+            // unlock the buffers, if locked
+            unlockBufferScopes(readBuffer, readBuffers);
 
             // allow objects to be GC'ed.
             this.readBuffer = null;
@@ -526,6 +552,10 @@ class UnixAsynchronousSocketChannelImpl
                 PendingFuture<V,A> result = null;
                 synchronized (updateLock) {
                     this.isScatteringRead = isScatteringRead;
+
+                    // lock the buffers, if needed
+                    lockBufferScopes(dst, dsts);
+
                     this.readBuffer = dst;
                     this.readBuffers = dsts;
                     if (handler == null) {
@@ -603,6 +633,7 @@ class UnixAsynchronousSocketChannelImpl
                 }
                 return;
             }
+            unlockBufferScopes(writeBuffer, writeBuffers);
 
             // allow objects to be GC'ed.
             this.writeBuffer = null;
@@ -712,6 +743,10 @@ class UnixAsynchronousSocketChannelImpl
                 PendingFuture<V,A> result = null;
                 synchronized (updateLock) {
                     this.isGatheringWrite = isGatheringWrite;
+
+                    // lock buffers, if needed
+                    lockBufferScopes(src, srcs);
+
                     this.writeBuffer = src;
                     this.writeBuffers = srcs;
                     if (handler == null) {
