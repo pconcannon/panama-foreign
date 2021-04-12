@@ -418,7 +418,7 @@ public class IOUtil {
     }
 
     /** Unlock the buffers scope lock, if non-null. */
-    private static void unlockBufferScope(ByteBuffer bb)  {
+    private static void unlockBufferScope(ByteBuffer bb) {
         NIO_ACCESS.unlockBufferScope(bb);
     }
     private static void unlockBufferScopes(ByteBuffer[] bbs) {

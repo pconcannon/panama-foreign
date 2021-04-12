@@ -252,10 +252,9 @@ public class TestIOWithByteBuffers {
             var scope = ResourceScope.newConfinedScope();
             var handler = new TestHandler(null);
             ByteBuffer[] bbs = getSegmentBuffers(1, scope);
-            new Thread(() ->
-                        connectedChannel.write(bbs, 0, bbs.length, 0L,
+            new Thread(() -> connectedChannel.write(bbs, 0, bbs.length, 0L,
                                 TimeUnit.SECONDS, (Void) null, handler)).start();
-                assertHandlerError(handler, "Attempted access outside owning thread");
+            assertHandlerError(handler, "Attempted access outside owning thread");
         }
     }
 
@@ -374,21 +373,20 @@ public class TestIOWithByteBuffers {
                     fail("Future did not return result");
                 }
             } else {
-                if (result instanceof Long || result instanceof Integer) {
-                    long l = (long) result;
-                if (l <= 0)
-                    throw new RuntimeException("No bytes read");
-                }
+//                long l = (long) result;
+//                if (l <= 0)
+//                    throw new RuntimeException("No bytes read");
+//                }
                 latch.countDown();
             }
         }
         @Override
         public void failed (Throwable exc, Void att){
-            System.out.println("Failed!");
-            this.throwable = exc;
-            System.out.println(exc.getMessage());
-            latch.countDown();
             //TODO: should fail() be called here?
+            System.out.println("Failed!");
+            System.out.println(exc.getMessage());
+            this.throwable = exc;
+            latch.countDown();
         }
         private V getResult() {
             return result;
@@ -438,7 +436,7 @@ public class TestIOWithByteBuffers {
 
     private ByteBuffer[] getSegmentBuffers(int len, ResourceScope scope) {
         ByteBuffer[] bufs = new ByteBuffer[len];
-        for (int i=0; i < len; i++)
+        for (int i = 0; i < len; i++)
             bufs[i] = getSegmentBuffer(scope);
         return bufs;
     }

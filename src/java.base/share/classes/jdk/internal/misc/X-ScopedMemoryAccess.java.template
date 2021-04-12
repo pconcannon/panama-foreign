@@ -118,7 +118,7 @@ public class ScopedMemoryAccess {
         }
         // -- tunnel lock from ResourceScope.Lock
         AutoCloseable lockScope();
-        void unlockScope();
+        void unlockScope(AutoCloseable lock);
         // --
     }
 

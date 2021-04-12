@@ -164,11 +164,13 @@ public abstract class ResourceScopeImpl implements ResourceScope, ScopedMemoryAc
         return acquire();
     }
 
-    public void unlockScope() {
+    public void unlockScope(AutoCloseable lock) {
         try {
-            close();
-        } catch (Exception ex) { }
+            ((Handle) lock).close();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex.getCause()); }
     }
+
     /**
      * Checks that this scope is still alive (see {@link #isAlive()}).
      * @throws IllegalStateException if this scope is already closed or if this is
